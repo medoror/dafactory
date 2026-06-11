@@ -1,0 +1,9 @@
+# Rust build artifacts
+/target
+
+# Local, machine-specific Claude Code settings (personal permission allowlist).
+# Shared config lives in .claude/settings.json, which IS tracked.
+.claude/settings.local.json
+
+# macOS
+.DS_Store

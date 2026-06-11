@@ -1,0 +1,11 @@
+# Build artifacts — never commit these. `factory run` stages with `git add -A`, so
+# anything an agent's build produces must be ignored here (ADR-0009).
+/target
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+
+# OS / editor cruft
+.DS_Store
