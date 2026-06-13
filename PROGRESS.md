@@ -15,6 +15,25 @@ what was learned, what to watch next.
 ## Log
 <!-- entries go here, newest first -->
 
+### 2026-06-12 — bugfix — real agent/judge integration (first live run)
+- First real end-to-end `factory run` (the real provider path is never exercised by
+  `cargo test`) failed RETRYABLE: the agent left an empty diff and the judge produced
+  no parseable JSON. Root cause: bare `claude -p` runs in the default permission mode,
+  which blocks file writes + Bash pending an approval that never comes headlessly — it
+  exits 0 having done nothing. Confirmed with a direct probe (no flag → "write blocked
+  pending permission", no file; `--dangerously-skip-permissions` → file written).
+- Fix (test-first): agent (`agent_command`) and judge (`judge_command`) now pass
+  `--dangerously-skip-permissions`, extracted into testable command-builders that
+  assert the flag. Also hardened `parse_verdict` to extract the verdict object from
+  prose / a ```json fence (string-aware brace matching, skips non-verdict objects)
+  instead of strict-parsing the whole stdout. 67 unit + 3 integration tests (6 new),
+  clippy `-D warnings` clean, fmt clean.
+- ADR-0017 records the permission posture: the rejected `acceptEdits` fork and the
+  safety tie-in (this is the autonomous posture that triggers the ADR-0013 sandbox —
+  fine for attended v0 use, not for unattended/untrusted code).
+- Found by dogfooding `factory` on a new app (`screener`); re-running its B1 with the
+  fixed binary to confirm the live loop reaches PR_READY.
+
 ### 2026-06-10 — ADR — integrated human-in-the-loop control plane (ADR-0016)
 - Added ADR-0016 (escalation hand-off via async notifications + a verdict store):
   under unattended operation ESCALATE becomes a loop→human→loop hand-off — a Notifier

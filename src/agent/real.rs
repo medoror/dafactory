@@ -2,6 +2,9 @@
 //! intent. Production path; not exercised by `cargo test` (no live model call) — the
 //! `scripted` agent covers `run`'s plumbing deterministically (ADR-0009).
 
+use std::path::Path;
+use std::process::Command;
+
 use anyhow::{bail, Context, Result};
 
 use super::{command_in_code_root, Agent, AgentOutcome, AgentRequest};
@@ -26,9 +29,7 @@ impl Default for RealAgent {
 impl Agent for RealAgent {
     fn implement(&self, request: &AgentRequest) -> Result<AgentOutcome> {
         let prompt = build_prompt(request);
-        let output = command_in_code_root(AGENT_BIN, &request.code_root)
-            .arg("-p")
-            .arg(&prompt)
+        let output = agent_command(&request.code_root, &prompt)
             .output()
             .with_context(|| format!("failed to spawn agent process `{AGENT_BIN}`"))?;
         if !output.status.success() {
@@ -42,6 +43,17 @@ impl Agent for RealAgent {
             log: String::from_utf8_lossy(&output.stdout).into_owned(),
         })
     }
+}
+
+/// The `claude` command for one implement pass: headless print mode (`-p`) in the
+/// code root with the `FACTORY_*` seams scrubbed (`command_in_code_root`).
+fn agent_command(code_root: &Path, prompt: &str) -> Command {
+    let mut command = command_in_code_root(AGENT_BIN, code_root);
+    command
+        .arg("-p")
+        .arg("--dangerously-skip-permissions")
+        .arg(prompt);
+    command
 }
 
 /// Compose the implement prompt. The working agreement (CLAUDE.md) and project
@@ -81,5 +93,25 @@ mod tests {
         assert!(prompt.contains("demo"));
         assert!(prompt.contains("run --once happy path"));
         assert!(prompt.contains("do not look outside it"));
+    }
+
+    #[test]
+    fn should_invoke_claude_headless_with_skip_permissions() {
+        // Headless `claude -p` blocks file writes pending an approval that never comes
+        // in non-interactive use, so the agent must skip permission prompts or every
+        // pass produces an empty diff.
+        let command = agent_command(Path::new("/work/demo"), "implement B3");
+
+        assert_eq!(command.get_program().to_string_lossy(), "claude");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.contains(&"-p".to_string()));
+        assert!(args.contains(&"implement B3".to_string()));
+        assert!(
+            args.contains(&"--dangerously-skip-permissions".to_string()),
+            "headless agent must skip permission prompts to write files"
+        );
     }
 }

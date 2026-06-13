@@ -119,8 +119,68 @@ pub fn build(provider: Provider, script: Option<PathBuf>) -> Result<Box<dyn Judg
 /// Parse a judge's JSON output into a `Verdict`, keeping only the per-scenario
 /// outcomes. Any self-reported `satisfaction`/`satisfied_count` is intentionally
 /// ignored — `factory` recomputes it (ADR-0008).
-pub fn parse_verdict(json: &str) -> Result<Verdict> {
-    serde_json::from_str(json).context("failed to parse judge verdict JSON")
+///
+/// The real judge spawns `claude -p`, which narrates around its JSON (often inside a
+/// ```` ```json ```` fence) rather than emitting a bare document. So this accepts
+/// either a clean JSON document or a verdict object embedded in prose: it tries a
+/// strict parse first, then each balanced `{...}` object in the text, returning the
+/// first that deserializes into a `Verdict` (a stray non-verdict object is skipped).
+pub fn parse_verdict(text: &str) -> Result<Verdict> {
+    if let Ok(verdict) = serde_json::from_str::<Verdict>(text.trim()) {
+        return Ok(verdict);
+    }
+    for candidate in json_object_slices(text) {
+        if let Ok(verdict) = serde_json::from_str::<Verdict>(candidate) {
+            return Ok(verdict);
+        }
+    }
+    anyhow::bail!("failed to parse judge verdict JSON: no verdict object found in judge output")
+}
+
+/// Every balanced `{...}` slice in `text`, in start order, so a JSON object embedded
+/// in prose (or a code fence) can be recovered. String-aware so braces inside JSON
+/// string values do not throw off the nesting depth.
+fn json_object_slices(text: &str) -> Vec<&str> {
+    let bytes = text.as_bytes();
+    let mut slices = Vec::new();
+    for (start, _) in bytes.iter().enumerate().filter(|(_, &b)| b == b'{') {
+        if let Some(end) = matching_brace(bytes, start) {
+            slices.push(&text[start..=end]);
+        }
+    }
+    slices
+}
+
+/// The index of the `}` that closes the `{` at `start`, accounting for nested objects
+/// and braces inside double-quoted strings; `None` if unbalanced.
+fn matching_brace(bytes: &[u8], start: usize) -> Option<usize> {
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (i, &c) in bytes.iter().enumerate().skip(start) {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if c == b'\\' {
+                escaped = true;
+            } else if c == b'"' {
+                in_string = false;
+            }
+        } else {
+            match c {
+                b'"' => in_string = true,
+                b'{' => depth += 1,
+                b'}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    None
 }
 
 /// Load and parse a verdict from a file. Shared by the scripted judge and by the
@@ -203,5 +263,51 @@ mod tests {
             Provider::Real
         );
         assert!(Provider::resolve(Some("bogus"), None).is_err());
+    }
+
+    #[test]
+    fn should_extract_verdict_json_from_a_fenced_code_block() {
+        // The real `claude -p` judge narrates around its JSON (verified empirically),
+        // often in a ```json fence. parse_verdict must find the verdict object, not
+        // assume the whole output is JSON.
+        let prose = "I drove the app against the scenarios.\n\n\
+             ```json\n\
+             {\"scenarios\": [{\"id\": \"S001\", \"satisfied\": true, \"observed\": \"named Apple and showed a price\"}]}\n\
+             ```\n\n\
+             That is my verdict.";
+
+        let verdict = parse_verdict(prose).unwrap();
+
+        assert_eq!(verdict.total_count(), 1);
+        assert!(verdict.scenarios[0].satisfied);
+    }
+
+    #[test]
+    fn should_extract_verdict_json_embedded_in_prose_without_fences() {
+        let prose = "Here is the verdict: \
+             {\"scenarios\":[{\"id\":\"S001\",\"satisfied\":false,\"observed\":\"no runnable tool found\"}]} \
+             — done.";
+
+        let verdict = parse_verdict(prose).unwrap();
+
+        assert_eq!(verdict.total_count(), 1);
+        assert_eq!(verdict.satisfied_count(), 0);
+    }
+
+    #[test]
+    fn should_skip_non_verdict_objects_and_find_the_real_one() {
+        // A stray JSON-looking object in the prose must not be mistaken for the verdict.
+        let prose = "Config was {\"mode\": \"black-box\"}. Verdict: \
+             {\"scenarios\":[{\"id\":\"S001\",\"satisfied\":true,\"observed\":\"ok\"}]}";
+
+        let verdict = parse_verdict(prose).unwrap();
+
+        assert_eq!(verdict.total_count(), 1);
+        assert!(verdict.scenarios[0].satisfied);
+    }
+
+    #[test]
+    fn should_error_when_no_verdict_json_is_present() {
+        assert!(parse_verdict("I was unable to produce a verdict.").is_err());
     }
 }

@@ -31,9 +31,7 @@ impl Default for RealJudge {
 impl Judge for RealJudge {
     fn judge(&self, request: &JudgeRequest) -> Result<Verdict> {
         let prompt = build_prompt(request)?;
-        let output = Command::new(JUDGE_BIN)
-            .arg("-p")
-            .arg(&prompt)
+        let output = judge_command(&prompt)
             .output()
             .with_context(|| format!("failed to spawn judge process `{JUDGE_BIN}`"))?;
 
@@ -47,6 +45,19 @@ impl Judge for RealJudge {
         let stdout = String::from_utf8(output.stdout).context("judge output was not UTF-8")?;
         parse_verdict(&stdout)
     }
+}
+
+/// The `claude` command that runs the judge: headless print mode (`-p`) on the
+/// composed prompt. Unlike the agent, the judge is *not* launched via
+/// `command_in_code_root` — it is the trusted party allowed to see the holdout, so
+/// its environment is not scrubbed (ADR-0002, ADR-0011).
+fn judge_command(prompt: &str) -> Command {
+    let mut command = Command::new(JUDGE_BIN);
+    command
+        .arg("-p")
+        .arg("--dangerously-skip-permissions")
+        .arg(prompt);
+    command
 }
 
 /// Compose the judge prompt from the holdout `judge.md` and the scenarios, telling
@@ -160,6 +171,26 @@ mod tests {
         assert!(
             !prompt.contains("SOURCE-SENTINEL"),
             "the judge prompt must not embed the app's source"
+        );
+    }
+
+    #[test]
+    fn should_invoke_claude_headless_with_skip_permissions() {
+        // The judge drives the app via tool/Bash calls, which headless `claude -p`
+        // blocks pending approval; without skipping permissions it can never run the
+        // app and returns prose instead of a verdict.
+        let command = judge_command("judge this");
+
+        assert_eq!(command.get_program().to_string_lossy(), "claude");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.contains(&"-p".to_string()));
+        assert!(args.contains(&"judge this".to_string()));
+        assert!(
+            args.contains(&"--dangerously-skip-permissions".to_string()),
+            "headless judge must skip permission prompts to drive the app"
         );
     }
 }

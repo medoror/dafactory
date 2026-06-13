@@ -19,6 +19,10 @@ PROGRESS.md at the start of every session.
 - Do not loosen, delete, or narrow tests to make them pass. Do not weaken
   scenarios. A failing check is information, not an obstacle to route around.
 - Keep the scope to what SPEC.md freezes. Anything else is NEEDS_DECISION.
+- **Do not run `git commit`, `git add`, or `git push`.** Leave your work in the
+  working tree. `factory` observes your changes via git and commits them itself on
+  `PR_READY` — that committed diff *is* the evidence bundle. If you commit, factory
+  sees no diff to record and the evidence of your work is lost.
 
 ## The holdout
 There is a held-out scenario set and a judge that live **outside this repo**. You
