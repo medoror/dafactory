@@ -106,6 +106,13 @@ Claude Code page before building.
   once the loop is unattended or the code is untrusted — which is exactly the
   trigger condition above.
 
+## Relationship to ADR-0018
+ADR-0018 (devenv environment + build scaffolding) is orthogonal and complementary: devenv
+defines *what* the environment contains (reproducibly); the sandbox defines *how isolated*
+the agent running in it is. Concretely, ADR-0018 absorbs the "validation environment"
+concern that formerly overlapped with this ADR's scope, leaving the sandbox focused purely
+on isolation/safety. `devenv shell` inside an `sbx` microVM is the full-strength version.
+
 ## References
 - Docker Sandboxes overview: https://docs.docker.com/ai/sandboxes/
 - Architecture (workspace mounting, networking, lifecycle):

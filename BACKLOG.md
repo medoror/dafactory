@@ -47,6 +47,16 @@ dependency view is the tail of this chain, not a standalone visualization task; 
 graph backlog also reshapes `run` selection, terminal states (a new "blocked, not
 exhausted" stall), and the integrity loop.
 
+Devenv environment + build scaffolding (ADR-0018): two phases sharing one `devenv.nix`.
+Phase 1 (v1 candidate, foundational) — `run` executes the agent inside `devenv shell`;
+`validate` drives the app via `devenv up`/`devenv test` against a reproducible environment
+instead of whatever is on the host. `init` gains a devenv-aware path: greenfield lays down
+a starter `devenv.nix`; brownfield detects an existing one (the first real job for the
+`--greenfield`/`--brownfield` flag). devenv is a power-up, not a requirement; host-only
+path is the fallback. Phase 2 (post-v0, alongside release/shipping) — same `devenv.nix`
+emits release artifacts via `devenv build`/`devenv container`. Verify before building:
+confirm non-interactive `devenv shell` agent invocation and `devenv test` judge driving.
+
 Human-in-the-loop escalation control plane (ADR-0016): async notifier provider +
 verdict store (skip/retry/pause) so unattended ESCALATE becomes a phone hand-off.
 Sits on top of the multi-iteration loop (built order: correct exit codes [done,

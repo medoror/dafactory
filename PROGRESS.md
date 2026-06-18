@@ -15,6 +15,26 @@ what was learned, what to watch next.
 ## Log
 <!-- entries go here, newest first -->
 
+### 2026-06-15 — ADR — integrated devenv environment + build scaffolding (ADR-0018)
+- Added ADR-0018 (environment and build scaffolding via devenv). Two-phase decision
+  sharing one `devenv.nix`. Phase 1 (v1 candidate): `run` executes the agent inside
+  `devenv shell`; `validate` drives the app via `devenv up`/`devenv test` against a
+  reproducible, known-good environment. `init` gains a devenv-aware path — greenfield
+  lays down a starter `devenv.nix`, brownfield detects an existing one — giving the
+  `--greenfield`/`--brownfield` flag its first real job. Phase 2 (post-v0): same
+  `devenv.nix` emits release artifacts via `devenv build`/`devenv container`; introduces
+  a pipeline-failure outcome the five terminal states don't yet cover. devenv is a
+  power-up (optional/detected), not a requirement; host-only path is the fallback.
+- Numbering: incoming file was authored as 0016 (already taken by the human-in-the-loop
+  control plane) → renumbered to 0018. Fixed two mis-numbered cross-references in the
+  content: `ADR-0012 (sandbox)` → ADR-0013, and `ADR-0014 (capability ordering)` →
+  ADR-0015 (the repo's actual numbers). Added a back-reference in ADR-0013 noting that
+  ADR-0018 absorbs the "validation environment" concern, leaving the sandbox focused on
+  isolation/safety.
+- BACKLOG post-v0 annotated (ADR-0018). Docs only; tests unaffected.
+- Next: nothing queued in v0. Next post-v0 work is Phase 1 of ADR-0018 (devenv
+  environment) — a precondition for meaningful autonomous `run` on real projects.
+
 ### 2026-06-12 — bugfix — real agent/judge integration (first live run)
 - First real end-to-end `factory run` (the real provider path is never exercised by
   `cargo test`) failed RETRYABLE: the agent left an empty diff and the judge produced
