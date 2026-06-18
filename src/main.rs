@@ -79,6 +79,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let judge = build_judge(judge.as_deref())?;
             let stamp = clock::RunStamp::now()?;
             let outcome = commands::run::run(&paths, &app, agent.as_ref(), judge.as_ref(), &stamp)?;
+            eprintln!("{}", progress_terminal(outcome.terminal_state, outcome.satisfaction));
             match outcome.satisfaction {
                 Some(value) => println!("Ran '{app}': {} ({value}%)", outcome.terminal_state),
                 None => println!("Ran '{app}': {}", outcome.terminal_state),
@@ -93,6 +94,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
             print!("{}", commands::ls::ls(&paths)?);
             Ok(ExitCode::SUCCESS)
         }
+    }
+}
+
+fn progress_terminal(state: evidence::TerminalState, satisfaction: Option<u8>) -> String {
+    match satisfaction {
+        Some(pct) => format!("factory: → {state} ({pct}%)"),
+        None => format!("factory: → {state}"),
     }
 }
 
@@ -113,4 +121,38 @@ fn build_agent(flag: Option<&str>) -> Result<Box<dyn agent::Agent>> {
 /// A non-empty environment variable, or `None`.
 fn env_var(name: &str) -> Option<String> {
     env::var(name).ok().filter(|v| !v.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::evidence::TerminalState;
+
+    #[test]
+    fn should_include_satisfaction_in_terminal_marker_when_present() {
+        assert_eq!(
+            progress_terminal(TerminalState::PrReady, Some(100)),
+            "factory: → PR_READY (100%)"
+        );
+        assert_eq!(
+            progress_terminal(TerminalState::Escalate, Some(42)),
+            "factory: → ESCALATE (42%)"
+        );
+        assert_eq!(
+            progress_terminal(TerminalState::NoOp, Some(100)),
+            "factory: → NO_OP (100%)"
+        );
+    }
+
+    #[test]
+    fn should_omit_satisfaction_in_terminal_marker_when_absent() {
+        assert_eq!(
+            progress_terminal(TerminalState::Retryable, None),
+            "factory: → RETRYABLE"
+        );
+        assert_eq!(
+            progress_terminal(TerminalState::Escalate, None),
+            "factory: → ESCALATE"
+        );
+    }
 }
