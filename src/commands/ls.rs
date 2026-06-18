@@ -38,6 +38,12 @@ pub fn rows(registry: &Registry) -> Vec<LsRow> {
 
 /// Render the rows as an aligned, borderless table. An empty registry gets a clear
 /// line rather than a bare header.
+///
+/// `SAT` and `LAST STATE` are independent by design (ADR-0010/0012): `validate` updates
+/// satisfaction (it *measures*), `run` updates the terminal state (it *decides*). So
+/// after a standalone `validate` between runs they can disagree — e.g. `SAT 100%` next
+/// to `LAST STATE RETRYABLE` from an earlier run — which is the measure/decide split,
+/// not a bug. A normal run-driven loop keeps them consistent because `run` sets both.
 pub fn render(rows: &[LsRow]) -> String {
     if rows.is_empty() {
         return "no registered projects\n".to_string();

@@ -15,6 +15,18 @@ what was learned, what to watch next.
 ## Log
 <!-- entries go here, newest first -->
 
+### 2026-06-18 — dogfood #4 — ls measured-vs-decided (resolved, no code)
+- Resolved as working-as-intended: `SAT` and `LAST STATE` are independent by the
+  deliberate measure/decide split (ADR-0010/0012) — `validate` measures, `run` decides.
+  The `SAT 100% / LAST STATE RETRYABLE` mismatch only appears after a standalone
+  `validate`; the normal run-driven loop keeps them consistent. A real fix (per-field
+  timestamps + an `ls` rework) is disproportionate for a rare cosmetic. Documented the
+  semantics in `ls.rs` (render doc comment) and marked the item resolved in the backlog.
+- Dogfood arc complete: #1 (progress markers), #2 (no-self-commit), #3 (dirty-tree
+  guidance) shipped; #4 resolved. 72 unit + 3 integration + 2 progress tests green;
+  clippy + fmt clean.
+- Next: open — the bigger ADRs (multi-iteration loop / devenv Phase 1) when wanted.
+
 ### 2026-06-18 — dogfood #3 — actionable guidance on a dirty baseline
 - Did: when `run` bails because the work tree is not clean, the bundle now says how to
   recover (commit / `git stash` / `git reset --hard`, then run again) and why (factory

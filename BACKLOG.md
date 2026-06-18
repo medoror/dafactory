@@ -63,26 +63,27 @@ Sits on top of the multi-iteration loop (built order: correct exit codes [done,
 ADR-0012] → loop → control plane); this is what `factory resume` hangs off.
 
 ## Discovered by dogfooding (screener build, 2026-06)
-First real end-to-end runs against a live app surfaced these. Concrete fixes / UX, not
-new capabilities — and good first dogfood targets once `run` can build them.
+First real end-to-end runs against a live app surfaced these. #1–#3 are done; #4 was
+resolved as working-as-intended.
 
-- **`run` emits progress.** A pass is silent for minutes during the agent build and the
-  judge, so a healthy run reads as a hang and gets Ctrl-C'd — which leaves a dirty tree.
-  Emit progress to stderr (selecting intent → running agent → validating → terminal
-  state), or at least a heartbeat. Root cause of the interrupted-run mess on screener B2.
-- **Enforce the no-self-commit contract in `run`.** ADR-0009 assumes the agent leaves an
-  uncommitted working-tree change, but `claude` self-commits by default; today only a
-  CLAUDE.md instruction (ADR-0017 era) discourages it. When the agent commits, factory's
-  `git add -A` sees only post-commit cruft, so the evidence bundle's `change.diff` misses
-  the real change (observed on screener B1). Fix: detect a moved HEAD after the agent step
-  and `git reset --soft` back so the changes return to the working tree for factory to
-  observe and commit. Makes the evidence model robust, not advisory.
-- **Recover from an interrupted run / dirty baseline.** A Ctrl-C'd pass leaves a dirty
-  tree; the next run only reports "working tree was not clean" with no remedy. Add a
-  guarded recovery (auto-stash, an opt-in `--allow-dirty`, or clear remediation guidance)
-  so an interrupted pass is not manual git surgery.
-- **Surface measured-vs-decided in `ls` (minor).** After a `validate` (or a salvage),
-  `ls` shows the last *run's* terminal state, which can lag the satisfaction `validate`
-  just refreshed (screener showed SAT 100% but LAST STATE RETRYABLE). May be
-  working-as-intended (ADR-0010/0012); if kept, distinguish "satisfaction measured at T"
-  from "last run state" so they are not conflated.
+- **[done — 02237bb…cc26df9] `run` emits progress.** A pass was silent for minutes during
+  the agent build and the judge, so a healthy run read as a hang and got Ctrl-C'd. Now
+  emits stage markers to stderr (intent → running agent → validating → terminal state).
+  Root cause of the interrupted-run mess on screener B2.
+- **[done — 244cce9] Enforce the no-self-commit contract in `run`.** `claude` self-commits
+  by default; when it did, `git add -A` saw only post-commit cruft and the evidence bundle
+  missed the real change (screener B1). `run` now captures HEAD before the agent and
+  `git reset --soft` back if it moved, so the change is observed and committed by factory.
+  Evidence model is robust, not advisory.
+- **[done — e11e140] Recover from an interrupted run / dirty baseline.** A dirty tree now
+  bails with actionable guidance (commit / `git stash` / `git reset --hard`, then run
+  again) instead of a bare "not clean". Chose guidance over `--allow-dirty`/auto-stash: a
+  dirty baseline muddies evidence attribution, and automated set-aside belongs in the
+  multi-iteration loop / control plane (ADR-0016).
+- **[resolved — working-as-intended] Surface measured-vs-decided in `ls`.** The
+  `SAT 100% / LAST STATE RETRYABLE` mismatch is the deliberate measure/decide split
+  (ADR-0010/0012): `validate` updates satisfaction, `run` updates the terminal state. It
+  only appears after a *standalone* `validate` between runs (the normal run-driven loop
+  keeps them consistent). A real fix needs per-field timestamps plus an `ls` rework —
+  disproportionate for a rare cosmetic. Documented in `ls.rs`; revisit if the
+  multi-iteration loop wants a richer status view.
