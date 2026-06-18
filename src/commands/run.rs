@@ -144,6 +144,7 @@ pub fn run(
     let (changed, diff, agent_log) = match &intent {
         Some(intent) => {
             eprintln!("factory: intent → {}", intent_label(intent));
+            let baseline = git::head(&code_root)?;
             let request = AgentRequest {
                 app: app.to_string(),
                 code_root: code_root.clone(),
@@ -170,6 +171,14 @@ pub fn run(
                     );
                 }
             };
+            // The agent contract is an *uncommitted* working-tree change (ADR-0009).
+            // Some agents (Claude Code by default) self-commit; if HEAD moved, rewind to
+            // the baseline so the agent's work is observed and committed by factory —
+            // otherwise `add_all` sees an empty tree and the evidence bundle would miss
+            // the real change (dogfooding finding from screener B1).
+            if git::head(&code_root)? != baseline {
+                git::reset_soft(&code_root, &baseline)?;
+            }
             git::add_all(&code_root)?;
             let diff = git::diff_cached(&code_root)?;
             (!diff.trim().is_empty(), diff, Some(log))
@@ -749,5 +758,35 @@ mod tests {
         let outcome = run(&paths, "demo", &FailingAgent, &all_satisfied(), &stamp()).unwrap();
 
         assert_eq!(outcome.terminal_state, TerminalState::Retryable);
+    }
+
+    #[test]
+    fn should_capture_the_real_diff_even_when_the_agent_self_commits() {
+        // ADR-0009 assumes the agent leaves an uncommitted change. Claude self-commits
+        // by default; when it does, factory must still observe and record the real diff
+        // (not the empty post-commit tree) so the evidence bundle is honest.
+        let dir = tempfile::tempdir().unwrap();
+        let paths = sandbox(dir.path());
+        let agent = FakeAgent {
+            effect: |root: &Path| {
+                std::fs::write(root.join("feature.txt"), "implemented").unwrap();
+                // The agent commits its own work, moving HEAD past factory's baseline.
+                git::add_all(root).unwrap();
+                git::commit(root, "agent self-commit").unwrap();
+            },
+        };
+
+        let outcome = run(&paths, "demo", &agent, &all_satisfied(), &stamp()).unwrap();
+
+        assert_eq!(outcome.terminal_state, TerminalState::PrReady);
+        let json = std::fs::read_to_string(outcome.bundle_dir.join("bundle.json")).unwrap();
+        let bundle: RunBundle = serde_json::from_str(&json).unwrap();
+        assert!(bundle.change.committed);
+        assert!(
+            bundle.change.diff.contains("feature.txt"),
+            "factory must capture the agent's real change, not the post-commit empty diff"
+        );
+        // Factory's own commit (citing the intent) is the tip; the tree is clean.
+        assert!(git::is_clean(&paths.code_root("demo")).unwrap());
     }
 }

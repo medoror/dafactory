@@ -15,6 +15,19 @@ what was learned, what to watch next.
 ## Log
 <!-- entries go here, newest first -->
 
+### 2026-06-18 — dogfood #2 — enforce the no-self-commit agent contract
+- Did: `run` captures HEAD before the agent and, if the agent self-committed (Claude
+  does by default), `git reset --soft` back to the baseline so the change is left
+  staged for factory to observe and commit (ADR-0009). New `git::head` / `reset_soft`.
+  Fixes the screener-B1 finding where a self-commit left factory committing only build
+  cruft and the evidence bundle missing the real diff.
+- Test-first: a fake agent that self-commits now still yields PR_READY with the real
+  diff in the bundle (was NoOp before). 71 unit + 3 integration + 2 progress tests
+  green; clippy `-D warnings` clean.
+- Also: fixed pre-existing rustfmt debt in the #1 progress-output files (main.rs,
+  tests/progress_output.rs were committed unformatted) in a follow-up fmt commit.
+- Next: dogfood #3 (recover from an interrupted run / dirty baseline), then #4.
+
 ### 2026-06-15 — ADR — integrated devenv environment + build scaffolding (ADR-0018)
 - Added ADR-0018 (environment and build scaffolding via devenv). Two-phase decision
   sharing one `devenv.nix`. Phase 1 (v1 candidate): `run` executes the agent inside

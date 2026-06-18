@@ -56,6 +56,20 @@ pub fn commit(dir: &Path, message: &str) -> Result<String> {
     Ok(run(dir, &["rev-parse", "HEAD"])?.trim().to_string())
 }
 
+/// The current HEAD commit hash.
+pub fn head(dir: &Path) -> Result<String> {
+    Ok(run(dir, &["rev-parse", "HEAD"])?.trim().to_string())
+}
+
+/// Move HEAD back to `commit` without touching the index or work tree, so any commits
+/// made since `commit` are undone but their changes remain staged. Used when an agent
+/// self-commits: the agent contract is an *uncommitted* change (ADR-0009), so factory
+/// rewinds to its baseline and observes/commits the change itself.
+pub fn reset_soft(dir: &Path, commit: &str) -> Result<()> {
+    run(dir, &["reset", "--soft", commit])?;
+    Ok(())
+}
+
 /// Run a git command in `dir`, returning stdout on success.
 fn run(dir: &Path, args: &[&str]) -> Result<String> {
     let output = Command::new("git")
@@ -112,5 +126,25 @@ mod tests {
         fs::write(dir.path().join("untracked.txt"), "x").unwrap();
 
         assert!(!is_clean(dir.path()).unwrap());
+    }
+
+    #[test]
+    fn should_soft_reset_head_leaving_later_changes_staged() {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path()).unwrap();
+        fs::write(dir.path().join("base.txt"), "base").unwrap();
+        add_all(dir.path()).unwrap();
+        let base = commit(dir.path(), "base").unwrap();
+        // A second commit on top — as a self-committing agent would leave.
+        fs::write(dir.path().join("feature.txt"), "impl").unwrap();
+        add_all(dir.path()).unwrap();
+        commit(dir.path(), "feature").unwrap();
+        assert_ne!(head(dir.path()).unwrap(), base);
+
+        reset_soft(dir.path(), &base).unwrap();
+
+        // HEAD is back at base, and the feature change is staged (in the cached diff).
+        assert_eq!(head(dir.path()).unwrap(), base);
+        assert!(diff_cached(dir.path()).unwrap().contains("feature.txt"));
     }
 }
