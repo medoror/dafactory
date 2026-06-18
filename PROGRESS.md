@@ -15,6 +15,19 @@ what was learned, what to watch next.
 ## Log
 <!-- entries go here, newest first -->
 
+### 2026-06-18 — dogfood #3 — actionable guidance on a dirty baseline
+- Did: when `run` bails because the work tree is not clean, the bundle now says how to
+  recover (commit / `git stash` / `git reset --hard`, then run again) and why (factory
+  needs a clean baseline to attribute the agent's diff), instead of a bare "not clean"
+  with a generic transient-retry residual. Stays RETRYABLE.
+- Chose guidance-only over `--allow-dirty`/auto-stash: a dirty baseline conflates
+  pre-existing changes with the agent's, muddying evidence attribution; automated
+  set-aside belongs in the future multi-iteration loop / control plane (ADR-0016),
+  not v0 `--once`.
+- Test-first: dirty-tree run → RETRYABLE whose bundle text includes stash/reset + "run
+  again". 72 unit + 3 integration + 2 progress tests green; clippy + fmt clean.
+- Next: dogfood #4 (ls measured-vs-decided) — the last one; possibly working-as-intended.
+
 ### 2026-06-18 — dogfood #2 — enforce the no-self-commit agent contract
 - Did: `run` captures HEAD before the agent and, if the agent self-committed (Claude
   does by default), `git reset --soft` back to the baseline so the change is left

@@ -119,12 +119,16 @@ pub fn run(
         );
     }
     if !git::is_clean(&code_root)? {
-        let bundle = machinery(
+        let bundle = base(
             app,
             run_id,
+            TerminalState::Retryable,
             None,
-            None,
-            "working tree was not clean before the run",
+            String::new(),
+            "working tree was not clean before the run — factory needs a clean baseline \
+             to attribute the agent's change",
+            "Commit, stash (`git stash`), or discard (`git reset --hard`) the changes in \
+             the code root, then run again.",
         );
         return finish(
             &mut registry,
@@ -788,5 +792,32 @@ mod tests {
         );
         // Factory's own commit (citing the intent) is the tip; the tree is clean.
         assert!(git::is_clean(&paths.code_root("demo")).unwrap());
+    }
+
+    #[test]
+    fn should_give_actionable_guidance_when_the_tree_is_not_clean() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = sandbox(dir.path());
+        // An uncommitted file (e.g. left by an interrupted run) dirties the baseline.
+        std::fs::write(paths.code_root("demo").join("dirty.txt"), "x").unwrap();
+        let agent = FakeAgent {
+            effect: |_root: &Path| {},
+        };
+
+        let outcome = run(&paths, "demo", &agent, &all_satisfied(), &stamp()).unwrap();
+
+        assert_eq!(outcome.terminal_state, TerminalState::Retryable);
+        let json = std::fs::read_to_string(outcome.bundle_dir.join("bundle.json")).unwrap();
+        let bundle: RunBundle = serde_json::from_str(&json).unwrap();
+        // The bail must say HOW to recover, not merely that the tree was dirty.
+        let guidance = format!("{} {}", bundle.summary, bundle.residual).to_lowercase();
+        assert!(
+            guidance.contains("stash"),
+            "bail should suggest how to recover (stash / commit / reset): {guidance}"
+        );
+        assert!(
+            guidance.contains("run again") || guidance.contains("re-run"),
+            "bail should tell the user to run again after cleaning: {guidance}"
+        );
     }
 }
