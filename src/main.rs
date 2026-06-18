@@ -79,7 +79,10 @@ fn run(cli: Cli) -> Result<ExitCode> {
             let judge = build_judge(judge.as_deref())?;
             let stamp = clock::RunStamp::now()?;
             let outcome = commands::run::run(&paths, &app, agent.as_ref(), judge.as_ref(), &stamp)?;
-            eprintln!("{}", progress_terminal(outcome.terminal_state, outcome.satisfaction));
+            eprintln!(
+                "{}",
+                progress_terminal(outcome.terminal_state, outcome.satisfaction)
+            );
             match outcome.satisfaction {
                 Some(value) => println!("Ran '{app}': {} ({value}%)", outcome.terminal_state),
                 None => println!("Ran '{app}': {}", outcome.terminal_state),

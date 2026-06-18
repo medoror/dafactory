@@ -52,7 +52,15 @@ fn should_emit_all_stage_markers_in_order_when_intent_exists() {
     std::fs::write(code_root.join("BACKLOG.md"), "- [ ] **B1 — do it.**\n").unwrap();
     git(
         &code_root,
-        &["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-aqm", "add intent"],
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@e",
+            "commit",
+            "-aqm",
+            "add intent",
+        ],
     );
     let verdict = write_verdict(
         home.path(),
@@ -83,9 +91,18 @@ fn should_emit_all_stage_markers_in_order_when_intent_exists() {
         .find("factory: → ESCALATE")
         .unwrap_or_else(|| panic!("terminal-state marker missing from stderr:\n{stderr}"));
 
-    assert!(intent_pos < agent_pos, "intent marker must precede agent marker");
-    assert!(agent_pos < validate_pos, "agent marker must precede validating marker");
-    assert!(validate_pos < terminal_pos, "validating marker must precede terminal marker");
+    assert!(
+        intent_pos < agent_pos,
+        "intent marker must precede agent marker"
+    );
+    assert!(
+        agent_pos < validate_pos,
+        "agent marker must precede validating marker"
+    );
+    assert!(
+        validate_pos < terminal_pos,
+        "validating marker must precede terminal marker"
+    );
 }
 
 /// With no open intent: no-intent marker → validating → terminal state.
