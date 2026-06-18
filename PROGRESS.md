@@ -15,6 +15,27 @@ what was learned, what to watch next.
 ## Log
 <!-- entries go here, newest first -->
 
+### 2026-06-18 — plan — next: post-v0 ADR build order (agreed, resume here)
+The dogfood arc (#1–#4) is done and the single-pass loop is hardened. Agreed order for
+the bigger ADRs:
+1. **Bounded multi-iteration loop** (`--max-iters`, attended) — START HERE. The keystone:
+   compose the now-trustworthy single pass into a loop. Needs neither sandbox nor control
+   plane (those are for `--afk`). Kills the manual run-each-intent cadence.
+2. **devenv Phase 1** (ADR-0018) — reproducible env + validation; the foundation for
+   autonomous runs on real projects (the host-deps / judge-runnability pain screener hit).
+3. **Unattended (`--afk`) + control plane (ADR-0016) + sandbox (ADR-0013)** — land
+   together; going unattended is the trigger for the other two.
+4. Later: graph backlog → dependency-aware selection → dependency view (ADR-0015); model
+   routing (ADR-0014, needs a 2nd agent provider first).
+
+Design knot to settle first for the loop: **how intents advance.** Nothing reliably ticks
+`- [ ]` → `- [x]` after PR_READY today (done by hand this session). The loop must decide —
+factory ticks the intent on PR_READY, or selection skips already-satisfied intents — and
+reconcile with the "backlog exhausted" terminal logic (ADR-0010).
+
+Resume mechanic: kick the loop off via the brainstorm → design-spec (docs/superpowers/specs)
+→ plan (docs/superpowers/plans) → TDD flow, same as the progress-output (#1) work.
+
 ### 2026-06-18 — dogfood #4 — ls measured-vs-decided (resolved, no code)
 - Resolved as working-as-intended: `SAT` and `LAST STATE` are independent by the
   deliberate measure/decide split (ADR-0010/0012) — `validate` measures, `run` decides.
