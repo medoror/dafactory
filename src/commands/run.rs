@@ -143,11 +143,13 @@ pub fn run(
     let intent = backlog::next_intent(&backlog_text);
     let (changed, diff, agent_log) = match &intent {
         Some(intent) => {
+            eprintln!("factory: intent → {}", intent_label(intent));
             let request = AgentRequest {
                 app: app.to_string(),
                 code_root: code_root.clone(),
                 intent: intent.clone(),
             };
+            eprintln!("factory: running agent...");
             let log = match agent.implement(&request) {
                 Ok(outcome) => outcome.log,
                 Err(err) => {
@@ -172,12 +174,16 @@ pub fn run(
             let diff = git::diff_cached(&code_root)?;
             (!diff.trim().is_empty(), diff, Some(log))
         }
-        None => (false, String::new(), None),
+        None => {
+            eprintln!("factory: no open intent — validating");
+            (false, String::new(), None)
+        }
     };
 
     // Step 3: validate on every pass — even no-change ones. NO_OP is earned by a
     // passing validation, never assumed from a clean tree (ADR-0010). No verdict is
     // machinery (RETRYABLE), NOT a sub-100 satisfaction.
+    eprintln!("factory: validating...");
     let validation = match evaluate(app, &code_root, &factory_root, judge, run_id) {
         Ok(validation) => validation,
         Err(err) => {
