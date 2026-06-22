@@ -315,7 +315,7 @@ pub fn run_loop(
                 retries_left = retries; // reset for the next intent
                 if let Some(ref intent) = outcome.intent {
                     tick_and_commit(&code_root, intent)
-                        .with_context(|| format!("tick failed after pass {}", passes_completed + 1))?;
+                        .with_context(|| format!("tick failed after pass {passes_completed}"))?;
                 }
                 false
             }

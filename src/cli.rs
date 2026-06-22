@@ -33,13 +33,16 @@ pub enum Commands {
         #[arg(long)]
         judge: Option<String>,
     },
-    /// Perform one outer-loop pass for an app.
+    /// Run the outer loop for an app (up to --max-iters passes).
     Run {
         /// Name of the registered app.
         app: String,
-        /// Perform exactly one pass (the only mode in v0).
-        #[arg(long)]
-        once: bool,
+        /// Number of loop passes to attempt (≥ 1).
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+        max_iters: u32,
+        /// Maximum retries allowed on RETRYABLE per occurrence (default 1).
+        #[arg(long, default_value_t = 1)]
+        retries: u32,
         /// Agent provider: `real` (default, spawns claude -p) or `scripted`.
         #[arg(long)]
         agent: Option<String>,

@@ -17,7 +17,7 @@ mod templates;
 use std::env;
 use std::process::ExitCode;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use clap::Parser;
 
 use cli::{Cli, Commands};
@@ -67,30 +67,38 @@ fn run(cli: Cli) -> Result<ExitCode> {
         }
         Commands::Run {
             app,
-            once,
+            max_iters,
+            retries,
             agent,
             judge,
         } => {
-            if !once {
-                bail!("v0 supports only `factory run <app> --once`");
-            }
             let paths = Paths::resolve()?;
             let agent = build_agent(agent.as_deref())?;
             let judge = build_judge(judge.as_deref())?;
-            let stamp = clock::RunStamp::now()?;
-            let outcome = commands::run::run(&paths, &app, agent.as_ref(), judge.as_ref(), &stamp)?;
+            let outcome = commands::run::run_loop(
+                &paths,
+                &app,
+                agent.as_ref(),
+                judge.as_ref(),
+                max_iters,
+                retries,
+            )?;
             eprintln!(
                 "{}",
-                progress_terminal(outcome.terminal_state, outcome.satisfaction)
+                progress_terminal(outcome.last_terminal_state, outcome.satisfaction)
             );
             match outcome.satisfaction {
-                Some(value) => println!("Ran '{app}': {} ({value}%)", outcome.terminal_state),
-                None => println!("Ran '{app}': {}", outcome.terminal_state),
+                Some(value) => println!(
+                    "Ran '{app}': {} ({value}%) in {}/{max_iters} passes",
+                    outcome.last_terminal_state, outcome.passes_completed
+                ),
+                None => println!(
+                    "Ran '{app}': {} in {}/{max_iters} passes",
+                    outcome.last_terminal_state, outcome.passes_completed
+                ),
             }
-            println!("  evidence: {}", outcome.bundle_dir.display());
-            // The exit code reflects the terminal state so a wrapper / the AFK loop
-            // can branch on $? (ADR-0012).
-            Ok(ExitCode::from(outcome.terminal_state.exit_code()))
+            println!("  evidence: {}", outcome.last_bundle_dir.display());
+            Ok(ExitCode::from(outcome.last_terminal_state.exit_code()))
         }
         Commands::Ls => {
             let paths = Paths::resolve()?;

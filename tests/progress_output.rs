@@ -73,7 +73,7 @@ fn should_emit_all_stage_markers_in_order_when_intent_exists() {
         .env("FACTORY_JUDGE", "scripted")
         .env("FACTORY_JUDGE_SCRIPT", &verdict)
         .current_dir(work.path())
-        .args(["run", "demo", "--once"])
+        .args(["run", "demo", "--max-iters", "1"])
         .output()
         .unwrap();
 
@@ -120,7 +120,7 @@ fn should_emit_no_intent_marker_when_backlog_exhausted() {
         .env("FACTORY_JUDGE", "scripted")
         .env("FACTORY_JUDGE_SCRIPT", &verdict)
         .current_dir(work.path())
-        .args(["run", "demo", "--once"])
+        .args(["run", "demo", "--max-iters", "1"])
         .output()
         .unwrap();
 

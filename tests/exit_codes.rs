@@ -59,7 +59,7 @@ fn no_op_exits_zero() {
         .env("FACTORY_JUDGE", "scripted")
         .env("FACTORY_JUDGE_SCRIPT", &verdict)
         .current_dir(work.path())
-        .args(["run", "demo", "--once"])
+        .args(["run", "demo", "--max-iters", "1"])
         .status()
         .unwrap();
 
@@ -77,7 +77,7 @@ fn retryable_exits_ten() {
 
     let status = factory(home.path())
         .current_dir(work.path())
-        .args(["run", "demo", "--once"])
+        .args(["run", "demo", "--max-iters", "1"])
         .status()
         .unwrap();
 
@@ -116,7 +116,7 @@ fn escalate_exits_eleven() {
         .env("FACTORY_JUDGE", "scripted")
         .env("FACTORY_JUDGE_SCRIPT", &verdict)
         .current_dir(work.path())
-        .args(["run", "demo", "--once"])
+        .args(["run", "demo", "--max-iters", "1"])
         .status()
         .unwrap();
 
