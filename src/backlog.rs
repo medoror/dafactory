@@ -14,6 +14,30 @@ pub fn next_intent(backlog: &str) -> Option<Intent> {
         .find_map(parse_unchecked)
 }
 
+/// Replace `[ ]` with `[x]` on the first line whose trimmed content equals `raw`.
+/// `raw` is already trimmed (from `Intent.raw`). Returns the original text if the
+/// line is not found — safe no-op.
+pub fn tick_intent(backlog: &str, raw: &str) -> String {
+    let mut ticked = false;
+    let body = backlog
+        .lines()
+        .map(|line| {
+            if !ticked && line.trim() == raw {
+                ticked = true;
+                line.replacen("[ ]", "[x]", 1)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if backlog.ends_with('\n') {
+        body + "\n"
+    } else {
+        body
+    }
+}
+
 /// Remove every `<!-- ... -->` span (including multi-line and unterminated ones) so a
 /// commented-out example intent is never mistaken for a real one. HTML comments do
 /// not nest, so a simple scan for matching delimiters is sufficient.
@@ -155,5 +179,36 @@ mod tests {
     #[test]
     fn should_ignore_a_single_line_comment_intent() {
         assert!(next_intent("<!-- - [ ] **B1 — x.** -->\n").is_none());
+    }
+
+    #[test]
+    fn should_tick_the_matching_intent_line() {
+        let backlog = "- [x] **B1 — done.**\n- [ ] **B2 — do it.**\n- [ ] **B3 — later.**\n";
+        let result = tick_intent(backlog, "- [ ] **B2 — do it.**");
+        assert_eq!(
+            result,
+            "- [x] **B1 — done.**\n- [x] **B2 — do it.**\n- [ ] **B3 — later.**\n"
+        );
+    }
+
+    #[test]
+    fn should_leave_text_unchanged_when_line_not_found() {
+        let backlog = "- [ ] **B1 — something.**\n";
+        let result = tick_intent(backlog, "- [ ] **B99 — nonexistent.**");
+        assert_eq!(result, backlog);
+    }
+
+    #[test]
+    fn should_only_tick_the_first_matching_line() {
+        let backlog = "- [ ] **B1 — dup.**\n- [ ] **B1 — dup.**\n";
+        let result = tick_intent(backlog, "- [ ] **B1 — dup.**");
+        assert_eq!(result, "- [x] **B1 — dup.**\n- [ ] **B1 — dup.**\n");
+    }
+
+    #[test]
+    fn should_preserve_trailing_newline() {
+        let backlog = "- [ ] **B1 — x.**\n";
+        let result = tick_intent(backlog, "- [ ] **B1 — x.**");
+        assert!(result.ends_with('\n'), "trailing newline must be preserved");
     }
 }
