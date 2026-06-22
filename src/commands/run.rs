@@ -11,7 +11,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 use crate::agent::{Agent, AgentRequest, Intent};
 use crate::backlog;
@@ -27,6 +27,7 @@ pub struct RunOutcome {
     pub terminal_state: TerminalState,
     pub bundle_dir: PathBuf,
     pub satisfaction: Option<u8>,
+    pub intent: Option<Intent>,
 }
 
 /// Map an observed agent effect + validation to a terminal state, for the path where
@@ -270,6 +271,93 @@ pub fn run(
     )
 }
 
+pub struct LoopOutcome {
+    pub last_terminal_state: TerminalState,
+    pub passes_completed: u32,
+    pub satisfaction: Option<u8>,
+    pub last_bundle_dir: PathBuf,
+}
+
+pub fn run_loop(
+    paths: &Paths,
+    app: &str,
+    agent: &dyn Agent,
+    judge: &dyn Judge,
+    max_iters: u32,
+    retries: u32,
+) -> Result<LoopOutcome> {
+    let code_root = {
+        let registry = Registry::load(&paths.registry_path())?;
+        registry
+            .apps
+            .get(app)
+            .ok_or_else(|| anyhow::anyhow!("app '{app}' is not registered; run `factory init {app}` first"))?
+            .code_root
+            .clone()
+    };
+
+    if max_iters == 0 {
+        bail!("max_iters must be at least 1");
+    }
+
+    let mut retries_left = retries;
+    let mut passes_completed: u32 = 0;
+    let mut last_outcome: Option<RunOutcome> = None;
+
+    for _pass in 1..=max_iters {
+        eprintln!("factory: pass {}/{max_iters}", passes_completed + 1);
+        let stamp = RunStamp::now()?;
+        let outcome = run(paths, app, agent, judge, &stamp)?;
+        passes_completed += 1;
+
+        let stop = match outcome.terminal_state {
+            TerminalState::PrReady => {
+                retries_left = retries; // reset for the next intent
+                if let Some(ref intent) = outcome.intent {
+                    tick_and_commit(&code_root, intent)
+                        .with_context(|| format!("tick failed after pass {}", passes_completed + 1))?;
+                }
+                false
+            }
+            TerminalState::Retryable if retries_left > 0 => {
+                retries_left -= 1;
+                eprintln!("factory: RETRYABLE — retrying ({retries_left} remaining)...");
+                false
+            }
+            _ => true,
+        };
+
+        last_outcome = Some(outcome);
+        if stop {
+            break;
+        }
+    }
+
+    let outcome = last_outcome.expect("max_iters >= 1 ensures at least one pass ran");
+    Ok(LoopOutcome {
+        last_terminal_state: outcome.terminal_state,
+        passes_completed,
+        satisfaction: outcome.satisfaction,
+        last_bundle_dir: outcome.bundle_dir,
+    })
+}
+
+fn tick_and_commit(code_root: &std::path::Path, intent: &Intent) -> Result<()> {
+    let backlog_path = code_root.join("BACKLOG.md");
+    let text = std::fs::read_to_string(&backlog_path)
+        .with_context(|| format!("failed to read BACKLOG.md at {}", backlog_path.display()))?;
+    let ticked = backlog::tick_intent(&text, &intent.raw);
+    std::fs::write(&backlog_path, ticked)
+        .with_context(|| format!("failed to write BACKLOG.md at {}", backlog_path.display()))?;
+    git::add_all(code_root)?;
+    let msg = match &intent.id {
+        Some(id) => format!("Advance backlog: tick {id}"),
+        None => "Advance backlog: tick intent".to_string(),
+    };
+    git::commit(code_root, &msg)?;
+    Ok(())
+}
+
 /// The human-readable summary + residual for a validated terminal state, written so
 /// the bundle is distinguishable in the evidence trail beyond the state field alone
 /// (ADR-0006, ADR-0010).
@@ -343,6 +431,11 @@ fn finish(
         terminal_state: bundle.terminal_state,
         bundle_dir,
         satisfaction,
+        intent: bundle.intent.as_ref().map(|ir| Intent {
+            id: ir.id.clone(),
+            title: ir.title.clone(),
+            raw: ir.raw.clone(),
+        }),
     })
 }
 
@@ -819,5 +912,111 @@ mod tests {
             guidance.contains("run again") || guidance.contains("re-run"),
             "bail should tell the user to run again after cleaning: {guidance}"
         );
+    }
+
+    // ─── run_loop tests ──────────────────────────────────────────────────────────
+
+    struct AlwaysFailAgent;
+    impl Agent for AlwaysFailAgent {
+        fn implement(&self, _request: &AgentRequest) -> Result<AgentOutcome> {
+            bail!("boom")
+        }
+    }
+
+    #[test]
+    fn should_run_all_max_iters_passes_when_every_pass_is_pr_ready() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = sandbox(dir.path());
+        // Two open intents so both passes find work.
+        let backlog_path = paths.code_root("demo").join("BACKLOG.md");
+        std::fs::write(
+            &backlog_path,
+            "- [ ] **B1 (→ S001) — first.**\n- [ ] **B2 (→ S002) — second.**\n",
+        )
+        .unwrap();
+        git::add_all(&paths.code_root("demo")).unwrap();
+        git::commit(&paths.code_root("demo"), "Two intents").unwrap();
+
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let c = counter.clone();
+        let agent = FakeAgent {
+            effect: move |root: &Path| {
+                let n = c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                std::fs::write(root.join(format!("feature-{n}.txt")), "x").unwrap();
+            },
+        };
+
+        let outcome = run_loop(&paths, "demo", &agent, &all_satisfied(), 2, 0).unwrap();
+
+        assert_eq!(outcome.last_terminal_state, TerminalState::PrReady);
+        assert_eq!(outcome.passes_completed, 2);
+        assert_eq!(
+            counter.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "agent should have run exactly twice"
+        );
+        // Both intents ticked.
+        let backlog = std::fs::read_to_string(&backlog_path).unwrap();
+        assert!(backlog.contains("- [x] **B1"), "B1 should be ticked");
+        assert!(backlog.contains("- [x] **B2"), "B2 should be ticked");
+        // Tree clean after the loop.
+        assert!(git::is_clean(&paths.code_root("demo")).unwrap());
+    }
+
+    #[test]
+    fn should_stop_on_escalate_and_return_last_terminal_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = sandbox(dir.path());
+        // No-op agent + failing judge → ESCALATE.
+        let agent = FakeAgent {
+            effect: |_root: &Path| {},
+        };
+
+        let outcome = run_loop(&paths, "demo", &agent, &one_failing(), 3, 0).unwrap();
+
+        assert_eq!(outcome.last_terminal_state, TerminalState::Escalate);
+        assert_eq!(outcome.passes_completed, 1);
+    }
+
+    #[test]
+    fn should_retry_once_then_stop_on_second_retryable() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = sandbox(dir.path());
+        // retries=1: first RETRYABLE is retried, second stops the loop.
+        let outcome = run_loop(&paths, "demo", &AlwaysFailAgent, &all_satisfied(), 5, 1).unwrap();
+
+        assert_eq!(outcome.last_terminal_state, TerminalState::Retryable);
+        assert_eq!(outcome.passes_completed, 2, "retry consumes one max-iters slot");
+    }
+
+    #[test]
+    fn should_stop_immediately_on_retryable_when_retries_is_zero() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = sandbox(dir.path());
+
+        let outcome = run_loop(&paths, "demo", &AlwaysFailAgent, &all_satisfied(), 5, 0).unwrap();
+
+        assert_eq!(outcome.last_terminal_state, TerminalState::Retryable);
+        assert_eq!(outcome.passes_completed, 1);
+    }
+
+    #[test]
+    fn should_stop_on_no_op_when_backlog_is_exhausted() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = sandbox(dir.path());
+        // Close the backlog so the first pass sees no intent.
+        let backlog = paths.code_root("demo").join("BACKLOG.md");
+        std::fs::write(&backlog, "- [x] **B3 — done.**\n").unwrap();
+        git::add_all(&paths.code_root("demo")).unwrap();
+        git::commit(&paths.code_root("demo"), "Close backlog").unwrap();
+
+        let agent = FakeAgent {
+            effect: |_root: &Path| {},
+        };
+
+        let outcome = run_loop(&paths, "demo", &agent, &all_satisfied(), 5, 0).unwrap();
+
+        assert_eq!(outcome.last_terminal_state, TerminalState::NoOp);
+        assert_eq!(outcome.passes_completed, 1);
     }
 }
