@@ -153,21 +153,23 @@ cd myapp && git add -A && git commit -m "Write spec and first intent"
 
 A clean git tree is a **precondition**: `run` observes the agent's work as a diff against this baseline, so an uncommitted tree makes it bail.
 
-### 6. Run one pass
+### 6. Run the loop
 
 ```bash
-factory run myapp --once
+factory run myapp --max-iters 5
 ```
 
-`factory` picks `B1`, hands it to the agent in the code root (holdout out of reach), validates against `S001`, and emits exactly one [terminal state](#how-a-run-resolves) plus an evidence bundle. On `PR_READY` it commits the change. The exit code reflects the state (`0` = `PR_READY`/`NO_OP`).
+`factory` picks the next open intent, hands it to the agent in the code root (holdout out of reach), validates against the holdout, and emits exactly one [terminal state](#how-a-run-resolves) plus an evidence bundle. On `PR_READY` it commits the change and ticks `- [ ]` → `- [x]` in the backlog, then continues to the next intent. The loop runs up to `--max-iters` passes and stops early on `NO_OP`, `ESCALATE`, or `NEEDS_DECISION`. The exit code reflects the last terminal state (`0` = `PR_READY`/`NO_OP`).
 
-### 7. Check status, then repeat
+Use `--max-iters 1` for a single pass, or a higher bound to let the loop advance through several intents unattended.
+
+### 7. Check status
 
 ```bash
 factory ls
 ```
 
-Shows each app's mode, last satisfaction, last terminal state, and last run time. v0 does **one intent per `run --once`**, so add the next intent + scenario and run again for each piece of work.
+Shows each app's mode, last satisfaction, last terminal state, and last run time. Add the next intent + scenario to keep the loop fed.
 
 ### Who writes what
 
@@ -193,16 +195,18 @@ Scaffolds a new project line. Creates the code root and the holdout root from te
 ### `factory validate <app>`
 Runs the held-out judge against the app's scenarios and reports a satisfaction fraction (0–100), plus an evidence bundle written under the holdout root's `evidence/`. The judge observes behavior only — it never reads the app's source. `validate` *measures*: it writes `last_satisfaction` and `last_run_at` to the registry and leaves `last_terminal_state` untouched. `factory` derives the fraction itself and ignores any self-reported count from the judge.
 
-### `factory run <app> --once`
-Performs exactly one pass of the loop:
+### `factory run <app> --max-iters <N> [--retries <N>]`
+Runs up to `N` passes of the loop (N ≥ 1). Each pass:
 
 1. Read the spec, ADRs, backlog, and progress.
 2. Select the next open backlog intent.
 3. Delegate implementation to the agent, in the code root, with the holdout out of reach.
 4. Validate against the holdout.
-5. Emit exactly one [terminal state](#how-a-run-resolves) plus an evidence bundle. On `PR_READY`, commit.
+5. Emit exactly one [terminal state](#how-a-run-resolves) plus an evidence bundle. On `PR_READY`, commit the change and tick the intent in `BACKLOG.md` as a separate commit, then continue to the next pass.
 
-**Preconditions:** an open intent (`- [ ]`) must exist, and the code root's git tree must be clean. Exit code reflects the terminal state: `PR_READY` and `NO_OP` exit 0; `ESCALATE`, `NEEDS_DECISION`, and `RETRYABLE` exit non-zero.
+**Stop conditions:** `NO_OP`, `ESCALATE`, and `NEEDS_DECISION` stop the loop immediately. `RETRYABLE` retries up to `--retries` times (default 1) before stopping; each retry consumes one pass from the budget.
+
+**Preconditions:** the code root's git tree must be clean before the first pass. Exit code reflects the last terminal state: `PR_READY` and `NO_OP` exit 0; `ESCALATE` exits 11; `NEEDS_DECISION` exits 12; `RETRYABLE` exits 10.
 
 ### `factory ls`
 Lists every registered project with its mode, last satisfaction, last terminal state, and last run time (a readable timestamp). Never-run fields show `—`; an empty registry prints a clear "no registered projects" line.
@@ -340,7 +344,7 @@ Being honest about what v0 is and isn't:
 
 - **One developer, one machine.** The registry lives in your OS data directory; there's no multi-user story and that's fine.
 - **One real agent provider** (Claude Code). The seam for others exists; the switch doesn't.
-- **`--once` only.** Each invocation does a single pass. The multi-iteration and unattended loops are deliberately deferred.
+- **Attended loop only.** `--max-iters` sets a bound; the unattended `--afk` mode is deliberately deferred.
 - **Construction boundary, not a sandbox** (see [The holdout boundary](#the-holdout-boundary)).
 
 ---
@@ -349,7 +353,7 @@ Being honest about what v0 is and isn't:
 
 From here, `factory` extends by being pointed at itself — every item is meant to be built *by* the factory, *on* the factory, which is also the cleanest test that the pattern holds. Each links to the ADR that records the decision.
 
-**Autonomy and dependency-aware work.** A multi-iteration loop, then unattended operation (`--afk` / `--watch` / `--max-iters`), plus an integrity loop that compares the growing code against its ADRs and pulls drift back. A deeper change is moving the backlog from a linear list to a graph where intents declare dependencies, so the loop picks the next *unblocked* intent — the prerequisite for dependency-aware execution and any dependency *view*. Sequenced in [ADR-0014](adr/0014-post-v0-capability-ordering.md).
+**Autonomy and dependency-aware work.** Unattended operation (`--afk` / `--watch`) on top of the attended `--max-iters` loop, plus an integrity loop that compares the growing code against its ADRs and pulls drift back. A deeper change is moving the backlog from a linear list to a graph where intents declare dependencies, so the loop picks the next *unblocked* intent — the prerequisite for dependency-aware execution and any dependency *view*. Sequenced in [ADR-0014](adr/0014-post-v0-capability-ordering.md).
 
 **Safety — Docker Sandboxes.** Upgrade the construction boundary to hypervisor isolation via Docker Sandboxes (`sbx`), as an optional `--sandbox` wrapper over the agent interface. [ADR-0012](adr/0012-sandbox-isolation-upgrade.md).
 
