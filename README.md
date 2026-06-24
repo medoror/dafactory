@@ -82,16 +82,21 @@ The distinction between the last three is deliberate. `ESCALATE` is a *structura
 - **Rust toolchain.** Needed to build or install from source, until prebuilt binaries are published.
 
 ### From source
-Replace the URL with this repo:
 
 ```bash
-# build from a clone
 git clone https://github.com/<your-github>/factory-cli
 cd factory-cli
-cargo build --release          # binary at target/release/factory
+./bin/build.sh       # builds target/release/factory
+./bin/install.sh     # copies it to ~/.local/bin (pass a path to override)
+```
 
-# or install straight from git
-cargo install --git https://github.com/<your-github>/factory-cli
+`install.sh` will run `build.sh` automatically if the binary isn't built yet. It prints the installed version on completion.
+
+To cut a release (bumps version, runs tests, builds):
+
+```bash
+./bin/release.sh patch   # or: major | minor | x.y.z
+./bin/install.sh
 ```
 
 Planned: prebuilt binaries on GitHub Releases (linux/macos, x86_64 + aarch64) and `brew install`.
