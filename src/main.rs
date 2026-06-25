@@ -106,9 +106,16 @@ fn run(cli: Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Commands::Scenarios { app } => {
-            eprintln!("error: `factory scenarios` is not yet implemented");
-            eprintln!("  app: {app}");
-            Ok(ExitCode::FAILURE)
+            let paths = Paths::resolve()?;
+            let outcome = commands::scenarios::scenarios(&paths, &app)?;
+            println!("Ready to draft scenarios for '{app}'.");
+            println!(
+                "  Open a fresh Claude session in: {}",
+                outcome.factory_root.display()
+            );
+            println!("  CLAUDE.md in that directory has the scenario format and session guidance.");
+            println!("  Close that session when done — never use it for `factory run` work.");
+            Ok(ExitCode::SUCCESS)
         }
     }
 }
