@@ -129,26 +129,16 @@ One unchecked `- [ ]` line, paired to a scenario id. `run` picks the first open 
 - [ ] **B1 (→ S001) — Greet by name.** `myapp --name Ada` prints a greeting that includes the name.
 ```
 
-### 4. Write the held-out scenario(s) — in the **holdout** root, not the code root
+### 4. Bootstrap the scenario-drafting context
 
-This is the contract the agent never sees. Put one file per scenario in the `scenarios/` dir of the holdout path from step 1. Make it **concrete and behavior-level** — a loose scenario is one the agent can satisfy without doing the real work (see [Writing scenarios](#writing-scenarios)).
-
-```markdown
-# S001 — greets by name
-Pairs with: B1
-
-## Driver
-Run `myapp --name Ada`.
-
-## Expected observable behavior
-- stdout contains `Ada`
-- exit code is 0
-
-## Not satisfied if
-- the name is missing from the output, or the command errors
+```bash
+factory scenarios myapp
 ```
 
-`judge.md` is already scaffolded in the holdout root — leave it or tune it.
+This copies your spec and backlog into the holdout root and writes a `CLAUDE.md` there
+with the scenario format and session-discipline guidance. Open a **fresh** Claude session
+in the path it prints — this is a different session from the one you used to write the
+spec. Draft your scenarios there, then close that session.
 
 ### 5. Commit the code root
 
@@ -184,7 +174,7 @@ The division of labor is the point — you own the *contract*, the agent owns th
 |---|---|
 | `SPEC.md` — the contract for this version | the code (the agent) |
 | `BACKLOG.md` intents | `PROGRESS.md` working memory (the agent) |
-| held-out scenarios + `judge.md` (in the holdout root) | the terminal state + evidence bundle (`factory`) |
+| held-out scenarios + `judge.md` (in the holdout root, using the context `factory scenarios` sets up) | the terminal state + evidence bundle (`factory`) |
 
 There is deliberately no `factory spec` command: you author the spec and the scenarios yourself, because they're what makes a green result trustworthy. If the tool wrote the spec *and* the code *and* judged itself, "passing" would mean nothing.
 
@@ -196,6 +186,15 @@ v0 is four commands. That's the whole surface — small on purpose.
 
 ### `factory init <app> [--greenfield | --brownfield]`
 Scaffolds a new project line. Creates the code root and the holdout root from templates embedded in the binary, makes the code root a git repo with an initial commit, and registers the app. `--greenfield` is the default; the mode is recorded in the registry. Re-running is idempotent. Prints the path to both roots.
+
+### `factory scenarios <app>`
+Copies `SPEC.md` and `BACKLOG.md` from the code root into the holdout root and writes
+a scenario-authoring `CLAUDE.md` there. Run this after you have written the spec and
+backlog. Then open a **fresh** Claude session in the printed holdout path — the
+`CLAUDE.md` there has the scenario format and the session-discipline guidance. Close
+that session when done; never use it for `factory run` work. The command validates that
+the spec has been filled in and the backlog has at least one open intent before copying.
+Re-running is idempotent.
 
 ### `factory validate <app>`
 Runs the held-out judge against the app's scenarios and reports a satisfaction fraction (0–100), plus an evidence bundle written under the holdout root's `evidence/`. The judge observes behavior only — it never reads the app's source. `validate` *measures*: it writes `last_satisfaction` and `last_run_at` to the registry and leaves `last_terminal_state` untouched. `factory` derives the fraction itself and ignores any self-reported count from the judge.
