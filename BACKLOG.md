@@ -34,6 +34,11 @@ assertion.
   During `run`, the implementer subprocess has no filesystem path to the factory
   root; an attempt to read the scenarios from inside the implementer fails.
 
+- [x] **B7 (→ S007) — `scenarios` bootstraps the holdout for scenario authoring.**
+  `factory scenarios <app>` copies the spec and backlog into the holdout root, writes
+  a scenario-authoring CLAUDE.md, and prints the holdout path. Errors if the spec is
+  still the empty template or the backlog has no open intents.
+
 ## Post-v0 (do not start — sequenced for dogfooding)
 multi-iteration `run` loop · `--max-iters` · `--watch` · `--afk` · integrity/ADR-drift
 loop · `factory status` · `factory resume` · `factory spec` · `factory scenario add`

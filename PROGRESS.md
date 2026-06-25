@@ -15,6 +15,20 @@ what was learned, what to watch next.
 ## Log
 <!-- entries go here, newest first -->
 
+### 2026-06-24 — B7 — PR_READY
+
+- Did: Implemented `factory scenarios <app>`. Validates SPEC.md is filled in (errors on
+  the unfilled stub marker `<!-- One paragraph`) and BACKLOG.md has open intents (via
+  `backlog::next_intent`, same comment-stripping as `run`). Copies both files into the
+  holdout root and writes a scenario-authoring CLAUDE.md from a new embedded template.
+  ADR-0019 records the decision (one-directional copy is safe; session is the boundary,
+  not the filesystem; separate command is the right trigger point). 9 unit tests (5
+  error-path + 4 happy-path), all tests green, clippy/fmt clean.
+- Learned: the "four commands, frozen" SPEC posture was a scope guard, not a permanent
+  ceiling — a fifth command warranted an ADR explaining why it's in scope.
+- Next: no open v0 items. Next post-v0 work per PROGRESS.md order: devenv Phase 1
+  (ADR-0018), then unattended loop + control plane (ADR-0016) + sandbox (ADR-0013).
+
 ### 2026-06-18 — plan — next: post-v0 ADR build order (agreed, resume here)
 The dogfood arc (#1–#4) is done and the single-pass loop is hardened. Agreed order for
 the bigger ADRs:
