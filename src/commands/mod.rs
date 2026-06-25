@@ -5,4 +5,5 @@
 pub mod init;
 pub mod ls;
 pub mod run;
+pub mod scenarios;
 pub mod validate;
