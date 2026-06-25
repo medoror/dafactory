@@ -56,6 +56,15 @@ pub fn scenarios(paths: &Paths, app: &str) -> Result<ScenariosOutcome> {
     fs::write(factory_root.join("CLAUDE.md"), claude_md)
         .context("failed to write CLAUDE.md to factory root")?;
 
+    // Write the scenarios/README.md format guide (refreshed each run so existing
+    // projects pick up the latest format)
+    let scenarios_dir = factory_root.join("scenarios");
+    fs::create_dir_all(&scenarios_dir)
+        .with_context(|| format!("failed to create {}", scenarios_dir.display()))?;
+    let scenarios_readme = crate::templates::SCENARIO_README.replace("{{app}}", app);
+    fs::write(scenarios_dir.join("README.md"), scenarios_readme)
+        .context("failed to write scenarios/README.md to factory root")?;
+
     Ok(ScenariosOutcome { factory_root })
 }
 
@@ -225,6 +234,25 @@ mod tests {
         let outcome = scenarios(&paths, "myapp").unwrap();
 
         assert_eq!(outcome.factory_root, factory_root);
+    }
+
+    #[test]
+    fn should_write_scenarios_readme_into_scenarios_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let (paths, _, factory_root) = setup_ready(dir.path());
+
+        scenarios(&paths, "myapp").unwrap();
+
+        let readme = fs::read_to_string(factory_root.join("scenarios/README.md")).unwrap();
+        assert!(readme.contains("myapp"), "app name should be substituted");
+        assert!(
+            readme.contains("S001"),
+            "scenarios/README.md should contain the scenario format example"
+        );
+        assert!(
+            !readme.contains("{{app}}"),
+            "template token should be substituted"
+        );
     }
 
     #[test]

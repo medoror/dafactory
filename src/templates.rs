@@ -61,6 +61,10 @@ pub const FACTORY_TEMPLATES: &[TemplateFile] = &[
 /// is written by `scenarios` once the spec and backlog are ready.
 pub const SCENARIO_CLAUDE: &str = include_str!("../templates/factory/CLAUDE.md");
 
+/// The scenarios directory README written by `factory scenarios`. Refreshed on every
+/// `scenarios` run so existing projects pick up the latest format guide.
+pub const SCENARIO_README: &str = include_str!("../templates/factory/scenarios/README.md");
+
 /// Write the full template set into both roots and create the evidence directory
 /// (ADR-0006). Overwrites existing files so re-`init` is idempotent.
 pub fn scaffold(code_root: &Path, factory_root: &Path, app: &str) -> Result<()> {
