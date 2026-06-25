@@ -56,6 +56,11 @@ pub const FACTORY_TEMPLATES: &[TemplateFile] = &[
     },
 ];
 
+/// The scenario-authoring working agreement written into the holdout root by
+/// `factory scenarios`. Not part of `FACTORY_TEMPLATES` (written by `init`) — it
+/// is written by `scenarios` once the spec and backlog are ready.
+pub const SCENARIO_CLAUDE: &str = include_str!("../templates/factory/CLAUDE.md");
+
 /// Write the full template set into both roots and create the evidence directory
 /// (ADR-0006). Overwrites existing files so re-`init` is idempotent.
 pub fn scaffold(code_root: &Path, factory_root: &Path, app: &str) -> Result<()> {
@@ -134,5 +139,11 @@ mod tests {
         let spec = fs::read_to_string(code_root.join("SPEC.md")).unwrap();
         assert!(spec.contains("# SPEC"));
         assert!(!spec.contains("user edits"));
+    }
+
+    #[test]
+    fn should_expose_scenario_claude_template_with_app_token() {
+        assert!(SCENARIO_CLAUDE.contains("{{app}}"));
+        assert!(SCENARIO_CLAUDE.contains("scenario"));
     }
 }

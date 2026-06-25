@@ -105,6 +105,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
             print!("{}", commands::ls::ls(&paths)?);
             Ok(ExitCode::SUCCESS)
         }
+        Commands::Scenarios { app } => {
+            eprintln!("error: `factory scenarios` is not yet implemented");
+            eprintln!("  app: {app}");
+            Ok(ExitCode::FAILURE)
+        }
     }
 }
 

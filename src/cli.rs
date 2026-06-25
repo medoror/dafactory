@@ -52,4 +52,10 @@ pub enum Commands {
     },
     /// List every registered app with its last-known state.
     Ls,
+    /// Copy spec and backlog into the holdout root and write a scenario-authoring
+    /// CLAUDE.md so you can open a fresh session there to draft scenarios.
+    Scenarios {
+        /// Name of the registered app.
+        app: String,
+    },
 }
