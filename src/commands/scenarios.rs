@@ -44,15 +44,17 @@ pub fn scenarios(paths: &Paths, app: &str) -> Result<ScenariosOutcome> {
     }
 
     // Copy spec and backlog into the holdout root
+    fs::create_dir_all(&factory_root)
+        .with_context(|| format!("failed to create factory root {}", factory_root.display()))?;
     fs::copy(&spec_path, factory_root.join("SPEC.md"))
-        .with_context(|| "failed to copy SPEC.md to factory root")?;
+        .context("failed to copy SPEC.md to factory root")?;
     fs::copy(&backlog_path, factory_root.join("BACKLOG.md"))
-        .with_context(|| "failed to copy BACKLOG.md to factory root")?;
+        .context("failed to copy BACKLOG.md to factory root")?;
 
     // Write the scenario-authoring CLAUDE.md from the embedded template
     let claude_md = crate::templates::SCENARIO_CLAUDE.replace("{{app}}", app);
     fs::write(factory_root.join("CLAUDE.md"), claude_md)
-        .with_context(|| "failed to write CLAUDE.md to factory root")?;
+        .context("failed to write CLAUDE.md to factory root")?;
 
     Ok(ScenariosOutcome { factory_root })
 }
