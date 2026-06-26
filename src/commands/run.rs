@@ -28,6 +28,8 @@ pub struct RunOutcome {
     pub bundle_dir: PathBuf,
     pub satisfaction: Option<u8>,
     pub intent: Option<Intent>,
+    pub summary: String,
+    pub residual: String,
 }
 
 /// Map an observed agent effect + validation to a terminal state, for the path where
@@ -276,6 +278,8 @@ pub struct LoopOutcome {
     pub passes_completed: u32,
     pub satisfaction: Option<u8>,
     pub last_bundle_dir: PathBuf,
+    pub summary: String,
+    pub residual: String,
 }
 
 pub fn run_loop(
@@ -341,6 +345,8 @@ pub fn run_loop(
         passes_completed,
         satisfaction: outcome.satisfaction,
         last_bundle_dir: outcome.bundle_dir,
+        summary: outcome.summary,
+        residual: outcome.residual,
     })
 }
 
@@ -438,6 +444,8 @@ fn finish(
             title: ir.title.clone(),
             raw: ir.raw.clone(),
         }),
+        summary: bundle.summary.clone(),
+        residual: bundle.residual.clone(),
     })
 }
 
@@ -1003,6 +1011,23 @@ mod tests {
 
         assert_eq!(outcome.last_terminal_state, TerminalState::Retryable);
         assert_eq!(outcome.passes_completed, 1);
+    }
+
+    #[test]
+    fn should_propagate_summary_and_residual_to_loop_outcome() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = sandbox(dir.path());
+        // AlwaysFailAgent → RETRYABLE; machinery() sets both summary and residual.
+        let outcome = run_loop(&paths, "demo", &AlwaysFailAgent, &all_satisfied(), 1, 0).unwrap();
+
+        assert!(
+            !outcome.summary.is_empty(),
+            "summary must propagate from RunBundle to LoopOutcome"
+        );
+        assert!(
+            !outcome.residual.is_empty(),
+            "residual must propagate from RunBundle to LoopOutcome"
+        );
     }
 
     #[test]
