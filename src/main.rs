@@ -97,6 +97,12 @@ fn run(cli: Cli) -> Result<ExitCode> {
                     outcome.last_terminal_state, outcome.passes_completed
                 ),
             }
+            if !outcome.summary.is_empty() {
+                println!("  summary:  {}", outcome.summary);
+            }
+            if !outcome.residual.is_empty() {
+                println!("  residual: {}", outcome.residual);
+            }
             println!("  evidence: {}", outcome.last_bundle_dir.display());
             Ok(ExitCode::from(outcome.last_terminal_state.exit_code()))
         }
