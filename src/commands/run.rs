@@ -291,7 +291,9 @@ pub fn run_loop(
         registry
             .apps
             .get(app)
-            .ok_or_else(|| anyhow::anyhow!("app '{app}' is not registered; run `factory init {app}` first"))?
+            .ok_or_else(|| {
+                anyhow::anyhow!("app '{app}' is not registered; run `factory init {app}` first")
+            })?
             .code_root
             .clone()
     };
@@ -986,7 +988,10 @@ mod tests {
         let outcome = run_loop(&paths, "demo", &AlwaysFailAgent, &all_satisfied(), 5, 1).unwrap();
 
         assert_eq!(outcome.last_terminal_state, TerminalState::Retryable);
-        assert_eq!(outcome.passes_completed, 2, "retry consumes one max-iters slot");
+        assert_eq!(
+            outcome.passes_completed, 2,
+            "retry consumes one max-iters slot"
+        );
     }
 
     #[test]

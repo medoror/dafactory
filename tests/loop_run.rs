@@ -61,7 +61,15 @@ fn should_tick_two_intents_and_exit_zero_after_two_pr_ready_passes() {
     .unwrap();
     git(
         &code_root,
-        &["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-aqm", "Two intents"],
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@e",
+            "commit",
+            "-aqm",
+            "Two intents",
+        ],
     );
 
     // A scripted agent that creates a uniquely-named file on each pass by reading a
