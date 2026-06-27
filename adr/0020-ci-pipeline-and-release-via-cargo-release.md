@@ -33,17 +33,21 @@ at what version a release happens.
 This satisfies both constraints: `Cargo.toml` is always accurate (no publishing mismatch)
 and CI never commits back to `main`.
 
-### Single workflow file, two jobs
+### Two workflow files with clean triggers
 
-One `.github/workflows/ci.yml` with two independently-triggered jobs:
+- **`ci.yml`** — triggers on `pull_request` and `push` to `main`. Runs
+  `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`. This is the merge
+  gate.
+- **`release.yml`** — triggers on tag push matching `v*.*.*`. Runs
+  `cargo build --release`. No `cargo publish` yet; `publish = false` in `release.toml`
+  until explicitly enabled.
 
-- **`check`** — triggers on PR and push to `main`. Runs `cargo fmt --check`,
-  `cargo clippy -- -D warnings`, `cargo test`. This is the merge gate.
-- **`publish`** — triggers on tag push matching `v*.*.*`. Runs `cargo build --release`.
-  No `cargo publish` yet; `publish = false` in `release.toml` until explicitly enabled.
-
-Two separate workflow files would require keeping toolchain versions in sync across
-files. One file, two jobs with different trigger conditions is simpler and sufficient.
+GitHub Actions triggers are workflow-level, not job-level. The alternative — one
+workflow file with `if:` conditions on each job to route by event type — works but
+produces fiddly, hard-to-read conditions (`!startsWith(github.ref, 'refs/tags/')`).
+Two files with clean, independent `on:` blocks is clearer and is what most Rust
+projects do in practice. Both files reference the same `rust-toolchain.toml`, so
+toolchain version stays in sync with no duplication.
 
 ### rust-toolchain.toml
 
@@ -84,7 +88,8 @@ Factory's dependencies are stable, so cache hit rate will be high.
   is fragile. Also decouples the developer from the release decision.
 - **Git tags as sole version source, Cargo.toml stays at 0.0.0.** Rejected — breaks
   `cargo publish` which requires `Cargo.toml` version to match the tag.
-- **Two workflow files (ci.yml + release.yml).** Rejected — requires keeping toolchain
-  versions in sync across files; unnecessary complexity at this scope.
+- **Single workflow file with `if:` conditions on each job.** Rejected — `if:` routing
+  by ref/event type is fiddly and obscures intent. Two files with clean triggers is
+  simpler and the industry convention.
 - **release-plz (fully automated release PRs).** Viable for higher automation, but
   heavier than needed now. Can be adopted later if the release cadence warrants it.

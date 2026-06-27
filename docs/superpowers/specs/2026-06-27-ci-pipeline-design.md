@@ -5,25 +5,27 @@
 
 ## Summary
 
-A single GitHub Actions workflow (`ci.yml`) with two independent jobs: a `check` job
-that validates every PR and push to `main`, and a `publish` job that fires on tag
-pushes produced by `cargo-release`. No auto-tagging inside CI. No crates.io publishing
-yet. Devenv integration deferred to ADR-0018 Phase 2.
+Two GitHub Actions workflow files with clean, independent triggers: `ci.yml` validates
+every PR and push to `main`; `release.yml` fires on tag pushes produced by
+`cargo-release`. No `if:` conditions routing jobs within a shared workflow. No
+auto-tagging inside CI. No crates.io publishing yet. Devenv integration deferred to
+ADR-0018 Phase 2.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `.github/workflows/ci.yml` | Workflow definition — check + publish jobs |
+| `.github/workflows/ci.yml` | Check job — triggers on PR and push to `main` |
+| `.github/workflows/release.yml` | Publish job — triggers on tag push `v*.*.*` |
 | `rust-toolchain.toml` | Pins stable toolchain with rustfmt and clippy components |
 | `release.toml` | cargo-release config: publish=false, tag format, commit message |
 | `adr/0020-ci-pipeline-and-release-via-cargo-release.md` | Companion ADR |
 
 ## Jobs
 
-### `check` job
+### `ci.yml` — check
 
-**Triggers:** pull_request, push to `main`
+**Triggers:** `pull_request`, `push` to `main`
 
 **Steps:**
 1. `cargo fmt --check` — formatting gate
@@ -33,15 +35,18 @@ yet. Devenv integration deferred to ADR-0018 Phase 2.
 **Caching:** `Swatinem/rust-cache` caches Cargo registry and build artifacts between
 runs. Significant speedup since factory's dependencies are stable.
 
-### `publish` job
+### `release.yml` — publish
 
 **Triggers:** tag push matching `v*.*.*`
 
 **Steps:**
 1. `cargo build --release` — verify the release build compiles
 
-No artifact upload and no `cargo publish` yet. The job exists as a verified gate that
-runs on every release tag, ready to extend when crates.io publishing is added.
+No artifact upload and no `cargo publish` yet. The file exists as a clean, verified
+gate on every release tag, ready to extend when crates.io publishing is added.
+
+Each file has a single, unambiguous `on:` trigger — no `if:` conditions routing jobs
+within a shared workflow.
 
 ## Toolchain
 
