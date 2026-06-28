@@ -328,6 +328,12 @@ pub fn run_loop(
             TerminalState::Retryable if retries_left > 0 => {
                 retries_left -= 1;
                 eprintln!("factory: RETRYABLE — retrying ({retries_left} remaining)...");
+                // The failed pass may have staged files (e.g. the agent called
+                // `git add` before evaluation failed). Reset to HEAD so the
+                // next pass starts from a clean baseline.
+                if git::is_repo(&code_root) {
+                    git::reset_hard(&code_root)?;
+                }
                 false
             }
             _ => true,
@@ -1048,5 +1054,48 @@ mod tests {
 
         assert_eq!(outcome.last_terminal_state, TerminalState::NoOp);
         assert_eq!(outcome.passes_completed, 1);
+    }
+
+    #[test]
+    fn should_restore_clean_baseline_before_retrying_after_a_staging_agent() {
+        // Regression: when the agent stages files (e.g. updates PROGRESS.md via
+        // `git add`) and evaluation then fails transiently, factory calls add_all
+        // and leaves those files staged. Without a cleanup step, the retry's
+        // is_clean() check fires with "working tree was not clean" and the retry
+        // never reaches the agent. The loop must reset to HEAD before each retry.
+        let dir = tempfile::tempdir().unwrap();
+        let paths = sandbox(dir.path());
+
+        let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let c = call_count.clone();
+        // Agent writes a real change AND explicitly stages it (simulating `git add`
+        // called inside the agent, as the real Claude agent does for PROGRESS.md).
+        let agent = FakeAgent {
+            effect: move |root: &Path| {
+                c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                std::fs::write(root.join("PROGRESS.md"), "agent progress note").unwrap();
+                git::add_all(root).unwrap(); // agent stages its own work early
+            },
+        };
+
+        // Judge always errors — simulates a transient evaluation failure.
+        struct AlwaysErrJudge;
+        impl Judge for AlwaysErrJudge {
+            fn judge(&self, _: &crate::judge::JudgeRequest) -> Result<Verdict> {
+                bail!("transient judge failure")
+            }
+        }
+
+        // retries=1: pass 1 → RETRYABLE (evaluate fails), loop should clean up and
+        // retry; pass 2 → RETRYABLE again (same judge), loop stops.
+        let outcome = run_loop(&paths, "demo", &agent, &AlwaysErrJudge, 5, 1).unwrap();
+
+        assert_eq!(outcome.last_terminal_state, TerminalState::Retryable);
+        assert_eq!(
+            call_count.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "the agent must run on both the original pass and the retry — \
+             staged files from pass 1 must not cause the retry to fail at is_clean"
+        );
     }
 }

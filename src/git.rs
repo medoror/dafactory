@@ -70,6 +70,15 @@ pub fn reset_soft(dir: &Path, commit: &str) -> Result<()> {
     Ok(())
 }
 
+/// Discard all staged and unstaged changes, restoring the work tree to HEAD.
+/// Used in `run_loop` to restore a clean baseline before retrying a RETRYABLE
+/// pass, so that staged files left by the agent (e.g. via an early `git add`)
+/// do not cause the retry's `is_clean` check to fail.
+pub fn reset_hard(dir: &Path) -> Result<()> {
+    run(dir, &["reset", "--hard", "HEAD"])?;
+    Ok(())
+}
+
 /// Run a git command in `dir`, returning stdout on success.
 fn run(dir: &Path, args: &[&str]) -> Result<String> {
     let output = Command::new("git")
@@ -126,6 +135,32 @@ mod tests {
         fs::write(dir.path().join("untracked.txt"), "x").unwrap();
 
         assert!(!is_clean(dir.path()).unwrap());
+    }
+
+    #[test]
+    fn should_hard_reset_and_restore_work_tree_to_head() {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path()).unwrap();
+        fs::write(dir.path().join("tracked.txt"), "v1").unwrap();
+        add_all(dir.path()).unwrap();
+        commit(dir.path(), "Initial").unwrap();
+
+        // Stage a modification — simulating the agent calling `git add` early.
+        fs::write(dir.path().join("tracked.txt"), "v2").unwrap();
+        add_all(dir.path()).unwrap();
+        assert!(!is_clean(dir.path()).unwrap());
+
+        reset_hard(dir.path()).unwrap();
+
+        assert!(
+            is_clean(dir.path()).unwrap(),
+            "tree must be clean after reset_hard"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("tracked.txt")).unwrap(),
+            "v1",
+            "tracked file must be restored to its HEAD content"
+        );
     }
 
     #[test]
