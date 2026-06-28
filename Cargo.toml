@@ -1,6 +1,6 @@
 [package]
 name = "factory"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2021"
 description = "Wraps a coding agent with held-out validation, explicit terminal states, and an evidence bundle as the unit of output."
 
