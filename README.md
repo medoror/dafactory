@@ -92,14 +92,21 @@ cd factory-cli
 
 `install.sh` will run `build.sh` automatically if the binary isn't built yet. It prints the installed version on completion.
 
-To cut a release (bumps version, runs tests, builds):
+To build and install locally (bumps version, runs tests, builds the binary):
 
 ```bash
 ./bin/release.sh patch   # or: major | minor | x.y.z
 ./bin/install.sh
 ```
 
-Planned: prebuilt binaries on GitHub Releases (linux/macos, x86_64 + aarch64) and `brew install`.
+To cut a GitHub release (bumps `Cargo.toml`, commits, tags, and pushes — triggers CI):
+
+```bash
+cargo install cargo-release   # one-time setup
+cargo release patch           # or: minor | major
+```
+
+The tag push triggers the release workflow on GitHub Actions. Planned: prebuilt binaries attached to GitHub Releases and `brew install`.
 
 ---
 
@@ -383,6 +390,11 @@ Every non-obvious decision is recorded as an ADR in [`adr/`](adr/), including th
 - **[0013](adr/0013-model-heterogeneity-and-provider-routing.md)** — model heterogeneity and provider routing.
 - **[0014](adr/0014-post-v0-capability-ordering.md)** — post-v0 capability ordering.
 - **[0015](adr/0015-human-in-the-loop-control-plane.md)** — the human-in-the-loop control plane.
+- **[0016](adr/0016-human-in-the-loop-control-plane.md)** — escalation hand-off via async notifications and a verdict store (unattended mode).
+- **[0017](adr/0017-real-providers-run-claude-with-skip-permissions.md)** — real agent and judge run `claude -p --dangerously-skip-permissions`.
+- **[0018](adr/0018-environment-and-build-scaffolding-via-devenv.md)** — environment and build scaffolding via devenv (two-phase: reproducible env + release build).
+- **[0019](adr/0019-scenarios-command-scenario-authoring-bootstrapping.md)** — `factory scenarios` command and scenario-authoring bootstrapping.
+- **[0020](adr/0020-ci-pipeline-and-release-via-cargo-release.md)** — CI pipeline and release via cargo-release.
 
 ---
 
