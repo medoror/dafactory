@@ -92,14 +92,14 @@ cd factory-cli
 
 `install.sh` will run `build.sh` automatically if the binary isn't built yet. It prints the installed version on completion.
 
-To build and install locally (bumps version, runs tests, builds the binary):
+To build and install locally:
 
 ```bash
-./bin/release.sh patch   # or: major | minor | x.y.z
-./bin/install.sh
+./bin/build.sh       # builds target/release/factory
+./bin/install.sh     # copies it to ~/.local/bin (pass a path to override)
 ```
 
-To cut a GitHub release (bumps `Cargo.toml`, commits, tags, and pushes — triggers CI):
+To cut a release (bumps `Cargo.toml`, commits, tags, pushes — triggers CI):
 
 ```bash
 cargo install cargo-release   # one-time setup
